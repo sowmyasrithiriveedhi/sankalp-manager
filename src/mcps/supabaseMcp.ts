@@ -46,10 +46,16 @@ export async function mcpSignOut(): Promise<{ success: boolean; error: string | 
 export async function mcpGetSession(): Promise<{ active: boolean; email: string | null }> {
   try {
     if (supabase) {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        console.warn('Supabase auth session error:', error.message);
+        // Force sign out to clear the bad session from local storage
+        await supabase.auth.signOut().catch(() => {});
+        return { active: false, email: null };
+      }
       return {
-        active: !!session,
-        email: session?.user?.email || null
+        active: !!data.session,
+        email: data.session?.user?.email || null
       };
     } else {
       const active = mockDb.getAdminSession();
@@ -58,7 +64,8 @@ export async function mcpGetSession(): Promise<{ active: boolean; email: string 
         email: active ? 'admin@sankalp.com' : null
       };
     }
-  } catch {
+  } catch (err) {
+    console.warn('MCP getSession exception:', err);
     return { active: false, email: null };
   }
 }

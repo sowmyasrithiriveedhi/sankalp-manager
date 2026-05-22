@@ -216,8 +216,8 @@ export default function Dashboard({
     return Math.max(0, totalQty - activeRentedQty);
   };
 
-  const activeTabClass = "border-b-2 border-indigo-600 py-4 px-1 text-sm font-medium text-indigo-600";
-  const inactiveTabClass = "border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700";
+  const activeTabClass = "whitespace-nowrap border-b-2 border-indigo-600 py-4 px-1 text-sm font-medium text-indigo-600";
+  const inactiveTabClass = "whitespace-nowrap border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700";
 
   const displayError = error || materialsError || customersError || rentalsError;
 
@@ -225,18 +225,18 @@ export default function Dashboard({
     <div className="min-h-screen bg-gray-50 text-gray-900">
       {/* Top Navbar */}
       <header className="border-b border-gray-200 bg-white shadow-xs">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <div>
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="text-center sm:text-left">
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">SankalpManager</h1>
             <p className="text-xs text-gray-500">Construction Material Rentals</p>
           </div>
-          <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            <span className="text-xs sm:text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full truncate max-w-[150px] sm:max-w-none">
               Admin: <strong className="text-gray-800 font-semibold">{userEmail}</strong>
             </span>
             <button
               onClick={onLogout}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-xs"
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-xs whitespace-nowrap"
             >
               Sign Out
             </button>
@@ -254,9 +254,9 @@ export default function Dashboard({
         )}
 
         {/* Dashboard Navigation Tabs */}
-        <div className="border-b border-gray-200 mb-8">
-          <div className="flex justify-between items-center">
-            <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+        <div className="border-b border-gray-200 mb-8 overflow-x-auto">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 pb-2 sm:pb-0">
+            <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto w-full" aria-label="Tabs">
               <button
                 onClick={() => setActiveTab('overview')}
                 className={activeTab === 'overview' ? activeTabClass : inactiveTabClass}
@@ -285,7 +285,7 @@ export default function Dashboard({
             <button
               onClick={handleGlobalRefresh}
               disabled={isLoading || isMaterialsLoading || isCustomersLoading || isRentalsLoading}
-              className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 shadow-xs disabled:bg-indigo-400"
+              className="w-full sm:w-auto rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 shadow-xs disabled:bg-indigo-400 whitespace-nowrap mb-2 sm:mb-0"
             >
               Refresh Data
             </button>
