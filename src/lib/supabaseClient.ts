@@ -3,16 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-// Only initialize if real (non-placeholder) credentials are provided
-// const hasRealCredentials =
-//   supabaseUrl &&
-//   supabaseAnonKey &&
-//   supabaseUrl !== 'https://cbtxsnooliknkaspvdzn.supabase.co' &&
-//   supabaseAnonKey !== 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNidHhzbm9vbGlrbmthc3B2ZHpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNTAyODAsImV4cCI6MjA5NDkyNjI4MH0.kl-jHRccMWS082VK57QTeO48QLS_Lz9fih-uU4GMveg';
 
-// export const supabase = hasRealCredentials
-//   ? createClient(supabaseUrl, supabaseAnonKey)
-//   : null;
 
 const hasRealCredentials =
   supabaseUrl &&
