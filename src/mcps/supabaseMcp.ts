@@ -208,3 +208,35 @@ export async function mcpReturnRental(
     return mockDb.updateRental(rentalId, returnDate, totalRent);
   }
 }
+
+export async function mcpDeleteMaterial(id: string): Promise<void> {
+  try {
+    if (supabase) {
+      // First delete associated rentals to avoid foreign key constraints
+      await supabase.from('rentals').delete().eq('material_id', id);
+      const { error } = await supabase.from('materials').delete().eq('id', id);
+      if (error) throw error;
+    } else {
+      mockDb.deleteMaterial(id);
+    }
+  } catch (err) {
+    console.error('MCP deleteMaterial error:', err);
+    throw err;
+  }
+}
+
+export async function mcpDeleteCustomer(id: string): Promise<void> {
+  try {
+    if (supabase) {
+      // First delete associated rentals to avoid foreign key constraints
+      await supabase.from('rentals').delete().eq('customer_id', id);
+      const { error } = await supabase.from('customers').delete().eq('id', id);
+      if (error) throw error;
+    } else {
+      mockDb.deleteCustomer(id);
+    }
+  } catch (err) {
+    console.error('MCP deleteCustomer error:', err);
+    throw err;
+  }
+}

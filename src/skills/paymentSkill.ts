@@ -14,9 +14,9 @@ export function calculateRentSkill(
   
   // Calculate difference in milliseconds
   const diffTime = Math.abs(returnDate.getTime() - rentalDate.getTime());
-  // Convert to days, rounded up to ensure at least 1 day is charged if returned on the same day
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+  // Convert difference to days and add 1 to count both rental and return days
+  const totalDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
   
-  // Formula: Quantity * Price Per Day * Number of Days
-  return quantity * pricePerDay * diffDays;
+  // Formula: Quantity * Price Per Day * Total Days
+  return quantity * pricePerDay * totalDays;
 }

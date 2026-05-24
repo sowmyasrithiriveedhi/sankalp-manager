@@ -37,6 +37,7 @@ export default function Dashboard({
     isLoading: isMaterialsLoading,
     error: materialsError,
     addMaterial,
+    removeMaterial,
     refreshMaterials
   } = useMaterials();
 
@@ -45,6 +46,7 @@ export default function Dashboard({
     isLoading: isCustomersLoading,
     error: customersError,
     addCustomer,
+    removeCustomer,
     refreshCustomers
   } = useCustomers();
 
@@ -145,6 +147,28 @@ export default function Dashboard({
       setCustSuccess(true);
       handleGlobalRefresh();
       setTimeout(() => setCustSuccess(false), 3000);
+    }
+  };
+
+  const handleDeleteMaterial = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this material? This may cause issues if there are active rentals.')) {
+      const success = await removeMaterial(id);
+      if (success) {
+        handleGlobalRefresh();
+      } else {
+        alert('Failed to delete material.');
+      }
+    }
+  };
+
+  const handleDeleteCustomer = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this customer? This may cause issues if they have active rentals.')) {
+      const success = await removeCustomer(id);
+      if (success) {
+        handleGlobalRefresh();
+      } else {
+        alert('Failed to delete customer.');
+      }
     }
   };
 
@@ -378,67 +402,13 @@ export default function Dashboard({
 
         {/* --- MATERIALS TAB CONTENT --- */}
         {activeTab === 'materials' && (
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-            {/* Materials List Table */}
-            <div className="lg:col-span-2 space-y-4">
-              <h2 className="text-xl font-bold text-gray-800">Construction Materials Catalog</h2>
-              {isMaterialsLoading ? (
-                <div className="text-sm text-gray-500">Loading catalog items...</div>
-              ) : materials.length === 0 ? (
-                <div className="text-sm text-gray-500 border border-dashed border-gray-300 p-6 rounded-md text-center">
-                  No materials cataloged yet.
-                </div>
-              ) : (
-                <div className="overflow-x-auto border border-gray-200 rounded-lg bg-white shadow-xs">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Material Name
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Total Stock
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Available Stock
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Price Per Day
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 bg-white">
-                      {materials.map((material) => {
-                        const dynamicAvailable = getDynamicAvailableStock(material.id, material.total_quantity);
-                        return (
-                          <tr key={material.id}>
-                            <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-gray-900">
-                              {material.name}
-                            </td>
-                            <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                              {material.total_quantity}
-                            </td>
-                            <td className={`whitespace-nowrap px-6 py-4 text-sm font-semibold ${dynamicAvailable === 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                              {dynamicAvailable}
-                            </td>
-                            <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900 font-medium">
-                              ₹{material.price_per_day} / day
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
+          <div className="flex flex-col gap-8">
             {/* Add Material Form */}
             <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-xs h-fit space-y-4">
               <h3 className="text-lg font-bold text-gray-800 border-b border-gray-100 pb-2">
                 Register New Material
               </h3>
-              
+
               {matFormError && (
                 <div className="rounded-md bg-red-50 p-3 border border-red-200 text-xs text-red-700">
                   {matFormError}
@@ -450,7 +420,7 @@ export default function Dashboard({
                 </div>
               )}
 
-              <form onSubmit={handleAddMaterialSubmit} className="space-y-4">
+              <form onSubmit={handleAddMaterialSubmit} className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
                 <div>
                   <label htmlFor="mat-name" className="block text-xs font-medium text-gray-700 mb-1">
                     Material Name
@@ -498,28 +468,25 @@ export default function Dashboard({
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  className="w-full rounded-md bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-xs"
-                >
-                  Add Material
-                </button>
+                <div className="sm:col-span-3">
+                  <button
+                    type="submit"
+                    className="w-full sm:w-auto px-6 rounded-md bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-xs"
+                  >
+                    Add Material
+                  </button>
+                </div>
               </form>
             </div>
-          </div>
-        )}
 
-        {/* --- CUSTOMERS TAB CONTENT --- */}
-        {activeTab === 'customers' && (
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-            {/* Customers List Table */}
-            <div className="lg:col-span-2 space-y-4">
-              <h2 className="text-xl font-bold text-gray-800">Registered Customer Registry</h2>
-              {isCustomersLoading ? (
-                <div className="text-sm text-gray-500">Loading customers...</div>
-              ) : customers.length === 0 ? (
+            {/* Materials List Table */}
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold text-gray-800">Construction Materials Catalog</h2>
+              {isMaterialsLoading ? (
+                <div className="text-sm text-gray-500">Loading catalog items...</div>
+              ) : materials.length === 0 ? (
                 <div className="text-sm text-gray-500 border border-dashed border-gray-300 p-6 rounded-md text-center">
-                  No customers registered yet.
+                  No materials cataloged yet.
                 </div>
               ) : (
                 <div className="overflow-x-auto border border-gray-200 rounded-lg bg-white shadow-xs">
@@ -527,30 +494,62 @@ export default function Dashboard({
                     <thead className="bg-gray-50">
                       <tr>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Customer Name
+                          Material Name
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Phone Number
+                          Total Stock
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Available Stock
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Price Per Day
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Action
                         </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 bg-white">
-                      {customers.map((customer) => (
-                        <tr key={customer.id}>
-                          <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-gray-900">
-                            {customer.name}
-                          </td>
-                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-600">
-                            {customer.phone}
-                          </td>
-                        </tr>
-                      ))}
+                      {materials.map((material) => {
+                        const dynamicAvailable = getDynamicAvailableStock(material.id, material.total_quantity);
+                        return (
+                          <tr key={material.id}>
+                            <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-gray-900">
+                              {material.name}
+                            </td>
+                            <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                              {material.total_quantity}
+                            </td>
+                            <td className={`whitespace-nowrap px-6 py-4 text-sm font-semibold ${dynamicAvailable === 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                              {dynamicAvailable}
+                            </td>
+                            <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900 font-medium">
+                              ₹{material.price_per_day} / day
+                            </td>
+                            <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium">
+                              <button
+                                onClick={() => handleDeleteMaterial(material.id)}
+                                className="text-red-600 hover:text-red-900"
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               )}
             </div>
+          </div>
+        )}
 
+
+        {/* --- CUSTOMERS TAB CONTENT --- */}
+        {activeTab === 'customers' && (
+          <div className="flex flex-col gap-8">
             {/* Add Customer Form */}
             <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-xs h-fit space-y-4">
               <h3 className="text-lg font-bold text-gray-800 border-b border-gray-100 pb-2">
@@ -568,7 +567,7 @@ export default function Dashboard({
                 </div>
               )}
 
-              <form onSubmit={handleAddCustomerSubmit} className="space-y-4">
+              <form onSubmit={handleAddCustomerSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
                 <div>
                   <label htmlFor="cust-name" className="block text-xs font-medium text-gray-700 mb-1">
                     Customer Name
@@ -599,22 +598,171 @@ export default function Dashboard({
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  className="w-full rounded-md bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-xs"
-                >
-                  Register Customer
-                </button>
+                <div className="sm:col-span-2">
+                  <button
+                    type="submit"
+                    className="w-full sm:w-auto px-6 rounded-md bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-xs"
+                  >
+                    Register Customer
+                  </button>
+                </div>
               </form>
+            </div>
+
+            {/* Customers List Table */}
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold text-gray-800">Registered Customer Registry</h2>
+              {isCustomersLoading ? (
+                <div className="text-sm text-gray-500">Loading customers...</div>
+              ) : customers.length === 0 ? (
+                <div className="text-sm text-gray-500 border border-dashed border-gray-300 p-6 rounded-md text-center">
+                  No customers registered yet.
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-gray-200 rounded-lg bg-white shadow-xs">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Customer Name
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Phone Number
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Action
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white">
+                      {customers.map((customer) => (
+                        <tr key={customer.id}>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-gray-900">
+                            {customer.name}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-600">
+                            {customer.phone}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium">
+                            <button
+                              onClick={() => handleDeleteCustomer(customer.id)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {/* --- RENTALS TAB CONTENT --- */}
         {activeTab === 'rentals' && (
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+          <div className="flex flex-col gap-8">
+            {/* Allocate Rental Form */}
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-xs h-fit space-y-4">
+              <h3 className="text-lg font-bold text-gray-800 border-b border-gray-100 pb-2">
+                Allocate Material Rental
+              </h3>
+
+              {rentFormError && (
+                <div className="rounded-md bg-red-50 p-3 border border-red-200 text-xs text-red-700">
+                  {rentFormError}
+                </div>
+              )}
+              {rentSuccess && (
+                <div className="rounded-md bg-green-50 p-3 border border-green-200 text-xs text-green-700">
+                  Rental allocated successfully! Stock updated.
+                </div>
+              )}
+
+              <form onSubmit={handleAllocateRentalSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                <div>
+                  <label htmlFor="rent-customer" className="block text-xs font-medium text-gray-700 mb-1">
+                    Select Customer
+                  </label>
+                  <select
+                    id="rent-customer"
+                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+                    value={rentCustId}
+                    onChange={(e) => setRentCustId(e.target.value)}
+                  >
+                    <option value="">-- Choose Customer --</option>
+                    {customers.map(c => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="rent-material" className="block text-xs font-medium text-gray-700 mb-1">
+                    Select Material
+                  </label>
+                  <select
+                    id="rent-material"
+                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+                    value={rentMatId}
+                    onChange={(e) => setRentMatId(e.target.value)}
+                  >
+                    <option value="">-- Choose Material --</option>
+                    {materials.map(m => {
+                      const avail = getDynamicAvailableStock(m.id, m.total_quantity);
+                      return (
+                        <option key={m.id} value={m.id} disabled={avail === 0}>
+                          {m.name} (Avail: {avail} / {m.total_quantity})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="rent-qty" className="block text-xs font-medium text-gray-700 mb-1">
+                    Quantity
+                  </label>
+                  <input
+                    id="rent-qty"
+                    type="number"
+                    min="1"
+                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="1"
+                    value={rentQty}
+                    onChange={(e) => setRentQty(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="rent-date" className="block text-xs font-medium text-gray-700 mb-1">
+                    Rental Date
+                  </label>
+                  <input
+                    id="rent-date"
+                    type="date"
+                    required
+                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+                    value={rentDate}
+                    onChange={(e) => setRentDate(e.target.value)}
+                  />
+                </div>
+
+                <div className="sm:col-span-2 lg:col-span-4">
+                  <button
+                    type="submit"
+                    className="w-full sm:w-auto px-6 rounded-md bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-xs"
+                  >
+                    Allocate Rental
+                  </button>
+                </div>
+              </form>
+            </div>
+
             {/* Rentals Registry Logs */}
-            <div className="lg:col-span-2 space-y-4">
+            <div className="space-y-4">
               <h2 className="text-xl font-bold text-gray-800">Rental Allocations History</h2>
               
               {isRentalsLoading ? (
@@ -702,101 +850,6 @@ export default function Dashboard({
                 </div>
               )}
             </div>
-
-            {/* Allocate Rental Form */}
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-xs h-fit space-y-4">
-              <h3 className="text-lg font-bold text-gray-800 border-b border-gray-100 pb-2">
-                Allocate Material Rental
-              </h3>
-              
-              {rentFormError && (
-                <div className="rounded-md bg-red-50 p-3 border border-red-200 text-xs text-red-700">
-                  {rentFormError}
-                </div>
-              )}
-              {rentSuccess && (
-                <div className="rounded-md bg-green-50 p-3 border border-green-200 text-xs text-green-700">
-                  Rental allocated successfully! Stock updated.
-                </div>
-              )}
-
-              <form onSubmit={handleAllocateRentalSubmit} className="space-y-4">
-                <div>
-                  <label htmlFor="rent-customer" className="block text-xs font-medium text-gray-700 mb-1">
-                    Select Customer
-                  </label>
-                  <select
-                    id="rent-customer"
-                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
-                    value={rentCustId}
-                    onChange={(e) => setRentCustId(e.target.value)}
-                  >
-                    <option value="">-- Choose Customer --</option>
-                    {customers.map(c => (
-                      <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="rent-material" className="block text-xs font-medium text-gray-700 mb-1">
-                    Select Material
-                  </label>
-                  <select
-                    id="rent-material"
-                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
-                    value={rentMatId}
-                    onChange={(e) => setRentMatId(e.target.value)}
-                  >
-                    <option value="">-- Choose Material --</option>
-                    {materials.map(m => {
-                      const avail = getDynamicAvailableStock(m.id, m.total_quantity);
-                      return (
-                        <option key={m.id} value={m.id} disabled={avail === 0}>
-                          {m.name} (Avail: {avail} / {m.total_quantity})
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="rent-qty" className="block text-xs font-medium text-gray-700 mb-1">
-                    Quantity
-                  </label>
-                  <input
-                    id="rent-qty"
-                    type="number"
-                    min="1"
-                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
-                    placeholder="1"
-                    value={rentQty}
-                    onChange={(e) => setRentQty(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="rent-date" className="block text-xs font-medium text-gray-700 mb-1">
-                    Rental Date
-                  </label>
-                  <input
-                    id="rent-date"
-                    type="date"
-                    required
-                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
-                    value={rentDate}
-                    onChange={(e) => setRentDate(e.target.value)}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full rounded-md bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-xs"
-                >
-                  Allocate Rental
-                </button>
-              </form>
-            </div>
           </div>
         )}
 
@@ -860,9 +913,9 @@ export default function Dashboard({
                       
                       if (tReturn < tRental) return 'Invalid return date Selected.';
                       
-                      const days = Math.ceil(Math.abs(tReturn - tRental) / (1000 * 60 * 60 * 24)) || 1;
+                      const days = Math.round(Math.abs(tReturn - tRental) / (1000 * 60 * 60 * 24)) + 1;
                       const cost = activeReturnRental.quantity * mat.price_per_day * days;
-                      return `Dynamic billing estimate: ₹${mat.price_per_day} × ${activeReturnRental.quantity} qty × ${days} days = ₹${cost}`;
+                      return `Estimated: ₹${mat.price_per_day} × ${activeReturnRental.quantity} qty × ${days} days = ₹${cost}`;
                     })()}
                   </div>
                 )}

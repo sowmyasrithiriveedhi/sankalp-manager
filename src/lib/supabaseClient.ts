@@ -176,5 +176,25 @@ export const mockDb = {
 
     localStorage.setItem(KEYS.RENTALS, JSON.stringify(rentals));
     return rentals[index];
+  },
+
+  deleteMaterial: (id: string): void => {
+    const materials = mockDb.getMaterials();
+    const updated = materials.filter(m => m.id !== id);
+    localStorage.setItem(KEYS.MATERIALS, JSON.stringify(updated));
+    // Cascade delete rentals
+    const rentals = mockDb.getRentals();
+    const updatedRentals = rentals.filter(r => r.material_id !== id);
+    localStorage.setItem(KEYS.RENTALS, JSON.stringify(updatedRentals));
+  },
+
+  deleteCustomer: (id: string): void => {
+    const customers = mockDb.getCustomers();
+    const updated = customers.filter(c => c.id !== id);
+    localStorage.setItem(KEYS.CUSTOMERS, JSON.stringify(updated));
+    // Cascade delete rentals
+    const rentals = mockDb.getRentals();
+    const updatedRentals = rentals.filter(r => r.customer_id !== id);
+    localStorage.setItem(KEYS.RENTALS, JSON.stringify(updatedRentals));
   }
 };

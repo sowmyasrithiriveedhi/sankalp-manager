@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getCustomersSkill, addCustomerSkill } from '../skills/customerSkill';
+import { getCustomersSkill, addCustomerSkill, deleteCustomerSkill } from '../skills/customerSkill';
 import { Customer } from '../lib/supabaseClient';
 
 /**
@@ -46,11 +46,28 @@ export function useCustomers() {
     }
   };
 
+  const removeCustomer = async (id: string): Promise<boolean> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await deleteCustomerSkill(id);
+      await fetchCustomers();
+      return true;
+    } catch (err: any) {
+      console.error('Failed to delete customer:', err);
+      setError(err.message || 'Failed to delete customer.');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return {
     customers,
     isLoading,
     error,
     addCustomer,
+    removeCustomer,
     refreshCustomers: fetchCustomers
   };
 }

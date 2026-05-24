@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getMaterialsSkill, addMaterialSkill } from '../skills/materialSkill';
+import { getMaterialsSkill, addMaterialSkill, deleteMaterialSkill } from '../skills/materialSkill';
 import { Material } from '../lib/supabaseClient';
 
 /**
@@ -50,11 +50,28 @@ export function useMaterials() {
     }
   };
 
+  const removeMaterial = async (id: string): Promise<boolean> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await deleteMaterialSkill(id);
+      await fetchMaterials();
+      return true;
+    } catch (err: any) {
+      console.error('Failed to delete material:', err);
+      setError(err.message || 'Failed to delete material.');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return {
     materials,
     isLoading,
     error,
     addMaterial,
+    removeMaterial,
     refreshMaterials: fetchMaterials
   };
 }
