@@ -240,3 +240,52 @@ export async function mcpDeleteCustomer(id: string): Promise<void> {
     throw err;
   }
 }
+
+export async function mcpUpdateMaterial(
+  id: string,
+  name: string,
+  totalQuantity: number,
+  pricePerDay: number
+): Promise<Material> {
+  try {
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('materials')
+        .update({ name, total_quantity: totalQuantity, price_per_day: pricePerDay })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    } else {
+      return mockDb.updateMaterial(id, name, totalQuantity, pricePerDay);
+    }
+  } catch (err) {
+    console.error('MCP updateMaterial error, falling back to mock:', err);
+    return mockDb.updateMaterial(id, name, totalQuantity, pricePerDay);
+  }
+}
+
+export async function mcpUpdateCustomer(
+  id: string,
+  name: string,
+  phone: string
+): Promise<Customer> {
+  try {
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('customers')
+        .update({ name, phone })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    } else {
+      return mockDb.updateCustomer(id, name, phone);
+    }
+  } catch (err) {
+    console.error('MCP updateCustomer error, falling back to mock:', err);
+    return mockDb.updateCustomer(id, name, phone);
+  }
+}

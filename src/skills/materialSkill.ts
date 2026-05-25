@@ -1,4 +1,4 @@
-import { mcpGetMaterials, mcpAddMaterial, mcpDeleteMaterial } from '../mcps/supabaseMcp';
+import { mcpGetMaterials, mcpAddMaterial, mcpDeleteMaterial, mcpUpdateMaterial } from '../mcps/supabaseMcp';
 import { Material } from '../lib/supabaseClient';
 
 /**
@@ -22,4 +22,13 @@ export async function addMaterialSkill(
 
 export async function deleteMaterialSkill(id: string): Promise<void> {
   return await mcpDeleteMaterial(id);
+}
+
+export async function updateMaterialSkill(
+  id: string,
+  name: string,
+  totalQuantity: number,
+  pricePerDay: number
+): Promise<Material> {
+  return await mcpUpdateMaterial(id, name, totalQuantity, pricePerDay);
 }

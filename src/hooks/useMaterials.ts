@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getMaterialsSkill, addMaterialSkill, deleteMaterialSkill } from '../skills/materialSkill';
+import { getMaterialsSkill, addMaterialSkill, deleteMaterialSkill, updateMaterialSkill } from '../skills/materialSkill';
 import { Material } from '../lib/supabaseClient';
 
 /**
@@ -66,12 +66,34 @@ export function useMaterials() {
     }
   };
 
+  const updateMaterial = async (
+    id: string,
+    name: string,
+    totalQuantity: number,
+    pricePerDay: number
+  ): Promise<boolean> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await updateMaterialSkill(id, name, totalQuantity, pricePerDay);
+      await fetchMaterials();
+      return true;
+    } catch (err: any) {
+      console.error('Failed to update material:', err);
+      setError(err.message || 'Failed to update material.');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return {
     materials,
     isLoading,
     error,
     addMaterial,
     removeMaterial,
+    updateMaterial,
     refreshMaterials: fetchMaterials
   };
 }

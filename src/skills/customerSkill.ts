@@ -1,4 +1,4 @@
-import { mcpGetCustomers, mcpAddCustomer, mcpDeleteCustomer } from '../mcps/supabaseMcp';
+import { mcpGetCustomers, mcpAddCustomer, mcpDeleteCustomer, mcpUpdateCustomer } from '../mcps/supabaseMcp';
 import { Customer } from '../lib/supabaseClient';
 
 /**
@@ -16,4 +16,8 @@ export async function addCustomerSkill(name: string, phone: string): Promise<Cus
 
 export async function deleteCustomerSkill(id: string): Promise<void> {
   return await mcpDeleteCustomer(id);
+}
+
+export async function updateCustomerSkill(id: string, name: string, phone: string): Promise<Customer> {
+  return await mcpUpdateCustomer(id, name, phone);
 }

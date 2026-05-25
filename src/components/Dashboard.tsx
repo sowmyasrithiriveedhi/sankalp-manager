@@ -5,7 +5,7 @@ import { DashboardStatsData } from '../hooks/useDashboardStats';
 import { useMaterials } from '../hooks/useMaterials';
 import { useCustomers } from '../hooks/useCustomers';
 import { useRentals } from '../hooks/useRentals';
-import { Rental } from '../lib/supabaseClient';
+import { Rental, Material, Customer } from '../lib/supabaseClient';
 
 interface DashboardProps {
   stats: DashboardStatsData;
@@ -17,6 +17,13 @@ interface DashboardProps {
 }
 
 type TabType = 'overview' | 'materials' | 'customers' | 'rentals';
+
+// A single row in the multi-material rental form
+interface RentalRow {
+  id: number;
+  matId: string;
+  qty: string;
+}
 
 export default function Dashboard({
   stats,
@@ -38,6 +45,7 @@ export default function Dashboard({
     error: materialsError,
     addMaterial,
     removeMaterial,
+    updateMaterial,
     refreshMaterials
   } = useMaterials();
 
@@ -47,6 +55,7 @@ export default function Dashboard({
     error: customersError,
     addCustomer,
     removeCustomer,
+    updateCustomer,
     refreshCustomers
   } = useCustomers();
 
@@ -60,7 +69,7 @@ export default function Dashboard({
   } = useRentals();
 
   // --- FORM STATES ---
-  
+
   // Material Form
   const [matName, setMatName] = useState('');
   const [matQty, setMatQty] = useState('');
@@ -68,17 +77,29 @@ export default function Dashboard({
   const [matFormError, setMatFormError] = useState<string | null>(null);
   const [matSuccess, setMatSuccess] = useState(false);
 
+  // Edit Material Modal
+  const [editMaterial, setEditMaterial] = useState<Material | null>(null);
+  const [editMatName, setEditMatName] = useState('');
+  const [editMatQty, setEditMatQty] = useState('');
+  const [editMatPrice, setEditMatPrice] = useState('');
+  const [editMatError, setEditMatError] = useState<string | null>(null);
+
   // Customer Form
   const [custName, setCustName] = useState('');
   const [custPhone, setCustPhone] = useState('');
   const [custFormError, setCustFormError] = useState<string | null>(null);
   const [custSuccess, setCustSuccess] = useState(false);
 
-  // Rental Allocation Form
+  // Edit Customer Modal
+  const [editCustomer, setEditCustomer] = useState<Customer | null>(null);
+  const [editCustName, setEditCustName] = useState('');
+  const [editCustPhone, setEditCustPhone] = useState('');
+  const [editCustError, setEditCustError] = useState<string | null>(null);
+
+  // Rental Allocation Form — supports multiple material rows
   const [rentCustId, setRentCustId] = useState('');
-  const [rentMatId, setRentMatId] = useState('');
-  const [rentQty, setRentQty] = useState('1');
   const [rentDate, setRentDate] = useState(todayStr);
+  const [rentalRows, setRentalRows] = useState<RentalRow[]>([{ id: Date.now(), matId: '', qty: '1' }]);
   const [rentFormError, setRentFormError] = useState<string | null>(null);
   const [rentSuccess, setRentSuccess] = useState(false);
 
@@ -130,6 +151,37 @@ export default function Dashboard({
     }
   };
 
+  const handleOpenEditMaterial = (mat: Material) => {
+    setEditMaterial(mat);
+    setEditMatName(mat.name);
+    setEditMatQty(String(mat.total_quantity));
+    setEditMatPrice(String(mat.price_per_day));
+    setEditMatError(null);
+  };
+
+  const handleEditMaterialSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editMaterial) return;
+    setEditMatError(null);
+
+    if (!editMatName.trim() || !editMatQty.trim() || !editMatPrice.trim()) {
+      setEditMatError('All fields are required.');
+      return;
+    }
+    const qty = parseInt(editMatQty);
+    const price = parseFloat(editMatPrice);
+    if (isNaN(qty) || qty <= 0) { setEditMatError('Quantity must be a positive integer.'); return; }
+    if (isNaN(price) || price <= 0) { setEditMatError('Price must be a positive number.'); return; }
+
+    const success = await updateMaterial(editMaterial.id, editMatName.trim(), qty, price);
+    if (success) {
+      setEditMaterial(null);
+      handleGlobalRefresh();
+    } else {
+      setEditMatError('Failed to update material. Please try again.');
+    }
+  };
+
   const handleAddCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCustFormError(null);
@@ -147,6 +199,32 @@ export default function Dashboard({
       setCustSuccess(true);
       handleGlobalRefresh();
       setTimeout(() => setCustSuccess(false), 3000);
+    }
+  };
+
+  const handleOpenEditCustomer = (cust: Customer) => {
+    setEditCustomer(cust);
+    setEditCustName(cust.name);
+    setEditCustPhone(cust.phone);
+    setEditCustError(null);
+  };
+
+  const handleEditCustomerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editCustomer) return;
+    setEditCustError(null);
+
+    if (!editCustName.trim() || !editCustPhone.trim()) {
+      setEditCustError('All fields are required.');
+      return;
+    }
+
+    const success = await updateCustomer(editCustomer.id, editCustName.trim(), editCustPhone.trim());
+    if (success) {
+      setEditCustomer(null);
+      handleGlobalRefresh();
+    } else {
+      setEditCustError('Failed to update customer. Please try again.');
     }
   };
 
@@ -172,36 +250,72 @@ export default function Dashboard({
     }
   };
 
+  // --- Rental Row Helpers ---
+  const addRentalRow = () => {
+    setRentalRows(rows => [...rows, { id: Date.now(), matId: '', qty: '1' }]);
+  };
+
+  const removeRentalRow = (rowId: number) => {
+    setRentalRows(rows => rows.filter(r => r.id !== rowId));
+  };
+
+  const updateRentalRow = (rowId: number, field: 'matId' | 'qty', value: string) => {
+    setRentalRows(rows => rows.map(r => r.id === rowId ? { ...r, [field]: value } : r));
+  };
+
   const handleAllocateRentalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setRentFormError(null);
     setRentSuccess(false);
 
-    if (!rentCustId || !rentMatId || !rentQty.trim() || !rentDate) {
-      setRentFormError('Please select a customer, material, quantity, and date.');
+    if (!rentCustId || !rentDate) {
+      setRentFormError('Please select a customer and a rental date.');
       return;
     }
 
-    const qty = parseInt(rentQty);
-    if (isNaN(qty) || qty <= 0) {
-      setRentFormError('Quantity must be a positive integer.');
+    const validRows = rentalRows.filter(r => r.matId);
+    if (validRows.length === 0) {
+      setRentFormError('Please select at least one material.');
       return;
     }
 
-    // Allocate rental (will perform automatic stock check inside rentalSubagent)
-    const result = await allocateRental(rentCustId, rentMatId, qty, rentDate, materials);
-    
-    if (result.success) {
+    for (const row of validRows) {
+      const qty = parseInt(row.qty);
+      if (isNaN(qty) || qty <= 0) {
+        setRentFormError('All quantities must be positive integers.');
+        return;
+      }
+      const mat = materials.find(m => m.id === row.matId);
+      if (!mat) { setRentFormError('Invalid material selected.'); return; }
+      const avail = getDynamicAvailableStock(mat.id, mat.total_quantity);
+      if (qty > avail) {
+        setRentFormError(`Insufficient stock for "${mat.name}". Available: ${avail}, requested: ${qty}.`);
+        return;
+      }
+    }
+
+    // Allocate each row as a separate rental record
+    let allSuccess = true;
+    let lastError = '';
+    for (const row of validRows) {
+      const qty = parseInt(row.qty);
+      const result = await allocateRental(rentCustId, row.matId, qty, rentDate, materials);
+      if (!result.success) {
+        allSuccess = false;
+        lastError = result.error || 'Failed to allocate rental.';
+        break;
+      }
+    }
+
+    if (allSuccess) {
       setRentCustId('');
-      setRentMatId('');
-      setRentQty('1');
       setRentDate(todayStr);
+      setRentalRows([{ id: Date.now(), matId: '', qty: '1' }]);
       setRentSuccess(true);
       handleGlobalRefresh();
       setTimeout(() => setRentSuccess(false), 3000);
     } else {
-      // Display the stock validation or insertion error directly
-      setRentFormError(result.error || 'Failed to allocate rental.');
+      setRentFormError(lastError);
     }
   };
 
@@ -394,7 +508,7 @@ export default function Dashboard({
                 SankalpManager System Operational
               </h3>
               <p className="text-sm text-indigo-700 leading-relaxed">
-                Step 3 is fully operational! The system checks stock automatically when allocating new rentals and reduces the Available Stock metric immediately. When rentals are marked as returned, the system dynamically calculates total rent based on pricing and duration, increments the stock level back, and registers the returned log.
+                Fully operational! Customers can take one or multiple materials in a single rental. The system checks stock automatically when allocating new rentals and reduces the Available Stock metric immediately. When rentals are marked as returned, the system dynamically calculates total rent based on pricing and duration, increments the stock level back, and registers the returned log.
               </p>
             </div>
           </div>
@@ -506,7 +620,7 @@ export default function Dashboard({
                           Price Per Day
                         </th>
                         <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Action
+                          Actions
                         </th>
                       </tr>
                     </thead>
@@ -527,7 +641,13 @@ export default function Dashboard({
                             <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900 font-medium">
                               ₹{material.price_per_day} / day
                             </td>
-                            <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium">
+                            <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium space-x-3">
+                              <button
+                                onClick={() => handleOpenEditMaterial(material)}
+                                className="text-indigo-600 hover:text-indigo-900"
+                              >
+                                Update
+                              </button>
                               <button
                                 onClick={() => handleDeleteMaterial(material.id)}
                                 className="text-red-600 hover:text-red-900"
@@ -555,7 +675,7 @@ export default function Dashboard({
               <h3 className="text-lg font-bold text-gray-800 border-b border-gray-100 pb-2">
                 Register New Customer
               </h3>
-              
+
               {custFormError && (
                 <div className="rounded-md bg-red-50 p-3 border border-red-200 text-xs text-red-700">
                   {custFormError}
@@ -630,7 +750,7 @@ export default function Dashboard({
                           Phone Number
                         </th>
                         <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Action
+                          Actions
                         </th>
                       </tr>
                     </thead>
@@ -643,7 +763,13 @@ export default function Dashboard({
                           <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-600">
                             {customer.phone}
                           </td>
-                          <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium">
+                          <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium space-x-3">
+                            <button
+                              onClick={() => handleOpenEditCustomer(customer)}
+                              className="text-indigo-600 hover:text-indigo-900"
+                            >
+                              Update
+                            </button>
                             <button
                               onClick={() => handleDeleteCustomer(customer.id)}
                               className="text-red-600 hover:text-red-900"
@@ -681,90 +807,115 @@ export default function Dashboard({
                 </div>
               )}
 
-              <form onSubmit={handleAllocateRentalSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                <div>
-                  <label htmlFor="rent-customer" className="block text-xs font-medium text-gray-700 mb-1">
-                    Select Customer
-                  </label>
-                  <select
-                    id="rent-customer"
-                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
-                    value={rentCustId}
-                    onChange={(e) => setRentCustId(e.target.value)}
-                  >
-                    <option value="">-- Choose Customer --</option>
-                    {customers.map(c => (
-                      <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>
-                    ))}
-                  </select>
+              <form onSubmit={handleAllocateRentalSubmit} className="space-y-4">
+                {/* Customer + Date row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="rent-customer" className="block text-xs font-medium text-gray-700 mb-1">
+                      Select Customer
+                    </label>
+                    <select
+                      id="rent-customer"
+                      className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+                      value={rentCustId}
+                      onChange={(e) => setRentCustId(e.target.value)}
+                    >
+                      <option value="">-- Choose Customer --</option>
+                      {customers.map(c => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="rent-date" className="block text-xs font-medium text-gray-700 mb-1">
+                      Rental Date
+                    </label>
+                    <input
+                      id="rent-date"
+                      type="date"
+                      required
+                      className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+                      value={rentDate}
+                      onChange={(e) => setRentDate(e.target.value)}
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label htmlFor="rent-material" className="block text-xs font-medium text-gray-700 mb-1">
-                    Select Material
-                  </label>
-                  <select
-                    id="rent-material"
-                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
-                    value={rentMatId}
-                    onChange={(e) => setRentMatId(e.target.value)}
-                  >
-                    <option value="">-- Choose Material --</option>
-                    {materials.map(m => {
-                      const avail = getDynamicAvailableStock(m.id, m.total_quantity);
-                      return (
-                        <option key={m.id} value={m.id} disabled={avail === 0}>
-                          {m.name} (Avail: {avail} / {m.total_quantity})
-                        </option>
-                      );
-                    })}
-                  </select>
+                {/* Material rows */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-700">Materials</span>
+                    <button
+                      type="button"
+                      onClick={addRentalRow}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 border border-indigo-300 rounded px-2 py-1 hover:bg-indigo-50"
+                    >
+                      + Add Material
+                    </button>
+                  </div>
+
+                  {rentalRows.map((row, idx) => {
+                    return (
+                      <div key={row.id} className="flex gap-3 items-end bg-gray-50 p-3 rounded-md border border-gray-200">
+                        <div className="flex-1">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Material {idx + 1}
+                          </label>
+                          <select
+                            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+                            value={row.matId}
+                            onChange={(e) => updateRentalRow(row.id, 'matId', e.target.value)}
+                          >
+                            <option value="">-- Choose Material --</option>
+                            {materials.map(m => {
+                              const avail = getDynamicAvailableStock(m.id, m.total_quantity);
+                              return (
+                                <option key={m.id} value={m.id} disabled={avail === 0}>
+                                  {m.name} (Avail: {avail} / {m.total_quantity})
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                        <div className="w-28">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Qty</label>
+                          <input
+                            type="number"
+                            min="1"
+                            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+                            value={row.qty}
+                            onChange={(e) => updateRentalRow(row.id, 'qty', e.target.value)}
+                          />
+                        </div>
+                        {rentalRows.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeRentalRow(row.id)}
+                            className="mb-0.5 text-red-500 hover:text-red-700 text-lg font-bold leading-none"
+                            title="Remove row"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
-                <div>
-                  <label htmlFor="rent-qty" className="block text-xs font-medium text-gray-700 mb-1">
-                    Quantity
-                  </label>
-                  <input
-                    id="rent-qty"
-                    type="number"
-                    min="1"
-                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
-                    placeholder="1"
-                    value={rentQty}
-                    onChange={(e) => setRentQty(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="rent-date" className="block text-xs font-medium text-gray-700 mb-1">
-                    Rental Date
-                  </label>
-                  <input
-                    id="rent-date"
-                    type="date"
-                    required
-                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
-                    value={rentDate}
-                    onChange={(e) => setRentDate(e.target.value)}
-                  />
-                </div>
-
-                <div className="sm:col-span-2 lg:col-span-4">
-                  <button
-                    type="submit"
-                    className="w-full sm:w-auto px-6 rounded-md bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-xs"
-                  >
-                    Allocate Rental
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  className="w-full sm:w-auto px-6 rounded-md bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-xs"
+                >
+                  Allocate Rental
+                </button>
               </form>
             </div>
 
             {/* Rentals Registry Logs */}
             <div className="space-y-4">
               <h2 className="text-xl font-bold text-gray-800">Rental Allocations History</h2>
-              
+
               {isRentalsLoading ? (
                 <div className="text-sm text-gray-500">Loading rental logs...</div>
               ) : rentals.length === 0 ? (
@@ -907,12 +1058,12 @@ export default function Dashboard({
                     {(() => {
                       const mat = materials.find(m => m.id === activeReturnRental.material_id);
                       if (!mat) return '';
-                      
+
                       const tRental = new Date(activeReturnRental.rental_date).getTime();
                       const tReturn = new Date(returnDate).getTime();
-                      
+
                       if (tReturn < tRental) return 'Invalid return date Selected.';
-                      
+
                       const days = Math.round(Math.abs(tReturn - tRental) / (1000 * 60 * 60 * 24)) + 1;
                       const cost = activeReturnRental.quantity * mat.price_per_day * days;
                       return `Estimated: ₹${mat.price_per_day} × ${activeReturnRental.quantity} qty × ${days} days = ₹${cost}`;
@@ -936,6 +1087,155 @@ export default function Dashboard({
                     className="flex-1 rounded-md bg-emerald-600 py-2 text-sm font-semibold text-white hover:bg-emerald-700 shadow-xs"
                   >
                     Mark Returned
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* --- EDIT MATERIAL MODAL --- */}
+        {editMaterial && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-md border border-gray-200 bg-white p-6 rounded-lg shadow-lg space-y-4">
+              <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                <h3 className="text-lg font-bold text-gray-900">Edit Material</h3>
+                <button
+                  onClick={() => { setEditMaterial(null); setEditMatError(null); }}
+                  className="text-gray-400 hover:text-gray-600 text-lg font-semibold"
+                >
+                  &times;
+                </button>
+              </div>
+
+              {editMatError && (
+                <div className="rounded-md bg-red-50 p-3 border border-red-200 text-xs text-red-700">
+                  {editMatError}
+                </div>
+              )}
+
+              <form onSubmit={handleEditMaterialSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="edit-mat-name" className="block text-xs font-medium text-gray-700 mb-1">
+                    Material Name
+                  </label>
+                  <input
+                    id="edit-mat-name"
+                    type="text"
+                    required
+                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+                    value={editMatName}
+                    onChange={(e) => setEditMatName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="edit-mat-qty" className="block text-xs font-medium text-gray-700 mb-1">
+                    Total Stock Quantity
+                  </label>
+                  <input
+                    id="edit-mat-qty"
+                    type="number"
+                    required
+                    min="1"
+                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+                    value={editMatQty}
+                    onChange={(e) => setEditMatQty(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="edit-mat-price" className="block text-xs font-medium text-gray-700 mb-1">
+                    Price Per Day (₹)
+                  </label>
+                  <input
+                    id="edit-mat-price"
+                    type="number"
+                    required
+                    min="1"
+                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+                    value={editMatPrice}
+                    onChange={(e) => setEditMatPrice(e.target.value)}
+                  />
+                </div>
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => { setEditMaterial(null); setEditMatError(null); }}
+                    className="flex-1 rounded-md border border-gray-300 bg-white py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 rounded-md bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-xs"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* --- EDIT CUSTOMER MODAL --- */}
+        {editCustomer && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-md border border-gray-200 bg-white p-6 rounded-lg shadow-lg space-y-4">
+              <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                <h3 className="text-lg font-bold text-gray-900">Edit Customer</h3>
+                <button
+                  onClick={() => { setEditCustomer(null); setEditCustError(null); }}
+                  className="text-gray-400 hover:text-gray-600 text-lg font-semibold"
+                >
+                  &times;
+                </button>
+              </div>
+
+              {editCustError && (
+                <div className="rounded-md bg-red-50 p-3 border border-red-200 text-xs text-red-700">
+                  {editCustError}
+                </div>
+              )}
+
+              <form onSubmit={handleEditCustomerSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="edit-cust-name" className="block text-xs font-medium text-gray-700 mb-1">
+                    Customer Name
+                  </label>
+                  <input
+                    id="edit-cust-name"
+                    type="text"
+                    required
+                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+                    value={editCustName}
+                    onChange={(e) => setEditCustName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="edit-cust-phone" className="block text-xs font-medium text-gray-700 mb-1">
+                    Phone Number
+                  </label>
+                  <input
+                    id="edit-cust-phone"
+                    type="text"
+                    required
+                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+                    value={editCustPhone}
+                    onChange={(e) => setEditCustPhone(e.target.value)}
+                  />
+                </div>
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => { setEditCustomer(null); setEditCustError(null); }}
+                    className="flex-1 rounded-md border border-gray-300 bg-white py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 rounded-md bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-xs"
+                  >
+                    Save Changes
                   </button>
                 </div>
               </form>

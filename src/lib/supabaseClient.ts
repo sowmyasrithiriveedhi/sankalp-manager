@@ -178,6 +178,24 @@ export const mockDb = {
     return rentals[index];
   },
 
+  updateMaterial: (id: string, name: string, total_quantity: number, price_per_day: number): Material => {
+    const materials = mockDb.getMaterials();
+    const index = materials.findIndex(m => m.id === id);
+    if (index === -1) throw new Error(`Material ${id} not found.`);
+    materials[index] = { ...materials[index], name, total_quantity, price_per_day };
+    localStorage.setItem(KEYS.MATERIALS, JSON.stringify(materials));
+    return materials[index];
+  },
+
+  updateCustomer: (id: string, name: string, phone: string): Customer => {
+    const customers = mockDb.getCustomers();
+    const index = customers.findIndex(c => c.id === id);
+    if (index === -1) throw new Error(`Customer ${id} not found.`);
+    customers[index] = { ...customers[index], name, phone };
+    localStorage.setItem(KEYS.CUSTOMERS, JSON.stringify(customers));
+    return customers[index];
+  },
+
   deleteMaterial: (id: string): void => {
     const materials = mockDb.getMaterials();
     const updated = materials.filter(m => m.id !== id);

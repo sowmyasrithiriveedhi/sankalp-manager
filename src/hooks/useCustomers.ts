@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getCustomersSkill, addCustomerSkill, deleteCustomerSkill } from '../skills/customerSkill';
+import { getCustomersSkill, addCustomerSkill, deleteCustomerSkill, updateCustomerSkill } from '../skills/customerSkill';
 import { Customer } from '../lib/supabaseClient';
 
 /**
@@ -62,12 +62,29 @@ export function useCustomers() {
     }
   };
 
+  const updateCustomer = async (id: string, name: string, phone: string): Promise<boolean> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await updateCustomerSkill(id, name, phone);
+      await fetchCustomers();
+      return true;
+    } catch (err: any) {
+      console.error('Failed to update customer:', err);
+      setError(err.message || 'Failed to update customer.');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return {
     customers,
     isLoading,
     error,
     addCustomer,
     removeCustomer,
+    updateCustomer,
     refreshCustomers: fetchCustomers
   };
 }
