@@ -20,3 +20,29 @@ export function calculateRentSkill(
   // Formula: Quantity * Price Per Day * Total Days
   return quantity * pricePerDay * totalDays;
 }
+
+/**
+ * Compares totalRent against the advance already paid and determines the payment outcome.
+ *
+ * Returns one of three statuses:
+ *  - 'remaining' : customer still owes money  → amount = what they need to pay
+ *  - 'refund'    : customer overpaid          → amount = what to return to them
+ *  - 'settled'   : exact match               → amount = 0
+ */
+export function calculatePaymentResultSkill(
+  totalRent: number,
+  advanceAmount: number
+): { status: 'remaining' | 'refund' | 'settled'; amount: number } {
+  const diff = totalRent - advanceAmount;
+
+  if (diff > 0) {
+    // Total rent is more than advance — customer needs to pay the difference
+    return { status: 'remaining', amount: diff };
+  } else if (diff < 0) {
+    // Advance exceeded total rent — return the excess to customer
+    return { status: 'refund', amount: Math.abs(diff) };
+  } else {
+    // Perfectly settled — no money changes hands
+    return { status: 'settled', amount: 0 };
+  }
+}

@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { DashboardStatsData } from '../hooks/useDashboardStats';
 import { useMaterials } from '../hooks/useMaterials';
 import { useCustomers } from '../hooks/useCustomers';
 import { useRentals } from '../hooks/useRentals';
 import { Rental, Material, Customer } from '../lib/supabaseClient';
+import { calculatePaymentResultSkill } from '../skills/paymentSkill';
 
 interface DashboardProps {
   stats: DashboardStatsData;
@@ -68,6 +69,9 @@ export default function Dashboard({
     refreshRentals
   } = useRentals();
 
+  // Stable counter for generating unique rental row IDs (avoids calling impure Date.now in render)
+  const rowIdCounter = useRef(1);
+
   // --- FORM STATES ---
 
   // Material Form
@@ -84,9 +88,9 @@ export default function Dashboard({
   const [editMatPrice, setEditMatPrice] = useState('');
   const [editMatError, setEditMatError] = useState<string | null>(null);
 
-  // Customer Form
   const [custName, setCustName] = useState('');
   const [custPhone, setCustPhone] = useState('');
+  const [custReference, setCustReference] = useState('');
   const [custFormError, setCustFormError] = useState<string | null>(null);
   const [custSuccess, setCustSuccess] = useState(false);
 
@@ -94,12 +98,14 @@ export default function Dashboard({
   const [editCustomer, setEditCustomer] = useState<Customer | null>(null);
   const [editCustName, setEditCustName] = useState('');
   const [editCustPhone, setEditCustPhone] = useState('');
+  const [editCustReference, setEditCustReference] = useState('');
   const [editCustError, setEditCustError] = useState<string | null>(null);
 
   // Rental Allocation Form — supports multiple material rows
   const [rentCustId, setRentCustId] = useState('');
   const [rentDate, setRentDate] = useState(todayStr);
-  const [rentalRows, setRentalRows] = useState<RentalRow[]>([{ id: Date.now(), matId: '', qty: '1' }]);
+  const [rentAdvance, setRentAdvance] = useState('0'); // Advance amount paid upfront
+  const [rentalRows, setRentalRows] = useState<RentalRow[]>(() => [{ id: Date.now(), matId: '', qty: '1' }]);
   const [rentFormError, setRentFormError] = useState<string | null>(null);
   const [rentSuccess, setRentSuccess] = useState(false);
 
@@ -107,6 +113,54 @@ export default function Dashboard({
   const [activeReturnRental, setActiveReturnRental] = useState<Rental | null>(null);
   const [returnDate, setReturnDate] = useState(todayStr);
   const [returnFormError, setReturnFormError] = useState<string | null>(null);
+
+  // Rentals History Pagination
+  const RENTALS_PER_PAGE = 10;
+  const [rentalsPage, setRentalsPage] = useState(1);
+
+  // --- PHONE VALIDATION HELPER ---
+
+  /**
+   * Validates an Indian mobile phone number.
+   * Rules (checked in order):
+   *  1. Must not be empty
+   *  2. Must contain only digits — no letters or special characters
+   *  3. Must be exactly 10 digits
+   *  4. First digit must be 6, 7, 8, or 9 (valid Indian mobile prefixes)
+   *  5. All digits must not be identical (e.g. 1111111111 is fake)
+   *
+   * Returns an error message string on failure, or null when valid.
+   */
+  const validatePhone = (phone: string): string | null => {
+    const trimmed = phone.trim();
+
+    // Rule 1 — empty check
+    if (!trimmed) {
+      return 'Phone number is required.';
+    }
+
+    // Rule 2 — digits only
+    if (!/^\d+$/.test(trimmed)) {
+      return 'Phone number must contain only digits (no letters or special characters).';
+    }
+
+    // Rule 3 — exactly 10 digits
+    if (trimmed.length !== 10) {
+      return `Phone number must be exactly 10 digits (you entered ${trimmed.length}).`;
+    }
+
+    // Rule 4 — valid Indian mobile prefix (6, 7, 8, or 9)
+    if (!/^[6-9]/.test(trimmed)) {
+      return 'Phone number must start with 6, 7, 8, or 9 (valid Indian mobile number).';
+    }
+
+    // Rule 5 — not all digits identical (e.g. 9999999999, 6666666666)
+    if (/^(\d)\1{9}$/.test(trimmed)) {
+      return 'Phone number cannot have all identical digits (e.g. 9999999999 is not valid).';
+    }
+
+    return null; // all checks passed
+  };
 
   // --- ACTIONS ---
 
@@ -187,15 +241,22 @@ export default function Dashboard({
     setCustFormError(null);
     setCustSuccess(false);
 
-    if (!custName.trim() || !custPhone.trim()) {
-      setCustFormError('All fields are required.');
+    if (!custName.trim()) {
+      setCustFormError('Customer name is required.');
       return;
     }
 
-    const success = await addCustomer(custName.trim(), custPhone.trim());
+    const phoneError = validatePhone(custPhone);
+    if (phoneError) {
+      setCustFormError(phoneError);
+      return;
+    }
+
+    const success = await addCustomer(custName.trim(), custPhone.trim(), custReference.trim());
     if (success) {
       setCustName('');
       setCustPhone('');
+      setCustReference('');
       setCustSuccess(true);
       handleGlobalRefresh();
       setTimeout(() => setCustSuccess(false), 3000);
@@ -206,6 +267,7 @@ export default function Dashboard({
     setEditCustomer(cust);
     setEditCustName(cust.name);
     setEditCustPhone(cust.phone);
+    setEditCustReference(cust.reference_name || '');
     setEditCustError(null);
   };
 
@@ -214,12 +276,18 @@ export default function Dashboard({
     if (!editCustomer) return;
     setEditCustError(null);
 
-    if (!editCustName.trim() || !editCustPhone.trim()) {
-      setEditCustError('All fields are required.');
+    if (!editCustName.trim()) {
+      setEditCustError('Customer name is required.');
       return;
     }
 
-    const success = await updateCustomer(editCustomer.id, editCustName.trim(), editCustPhone.trim());
+    const phoneError = validatePhone(editCustPhone);
+    if (phoneError) {
+      setEditCustError(phoneError);
+      return;
+    }
+
+    const success = await updateCustomer(editCustomer.id, editCustName.trim(), editCustPhone.trim(), editCustReference.trim());
     if (success) {
       setEditCustomer(null);
       handleGlobalRefresh();
@@ -297,9 +365,10 @@ export default function Dashboard({
     // Allocate each row as a separate rental record
     let allSuccess = true;
     let lastError = '';
+    const advanceAmt = parseFloat(rentAdvance) || 0; // parse advance once; default 0
     for (const row of validRows) {
       const qty = parseInt(row.qty);
-      const result = await allocateRental(rentCustId, row.matId, qty, rentDate, materials);
+      const result = await allocateRental(rentCustId, row.matId, qty, rentDate, materials, advanceAmt);
       if (!result.success) {
         allSuccess = false;
         lastError = result.error || 'Failed to allocate rental.';
@@ -310,7 +379,8 @@ export default function Dashboard({
     if (allSuccess) {
       setRentCustId('');
       setRentDate(todayStr);
-      setRentalRows([{ id: Date.now(), matId: '', qty: '1' }]);
+      setRentAdvance('0');
+      setRentalRows([{ id: rowIdCounter.current++, matId: '', qty: '1' }]);
       setRentSuccess(true);
       handleGlobalRefresh();
       setTimeout(() => setRentSuccess(false), 3000);
@@ -641,19 +711,27 @@ export default function Dashboard({
                             <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900 font-medium">
                               ₹{material.price_per_day} / day
                             </td>
-                            <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium space-x-3">
-                              <button
-                                onClick={() => handleOpenEditMaterial(material)}
-                                className="text-indigo-600 hover:text-indigo-900"
-                              >
-                                Update
-                              </button>
-                              <button
-                                onClick={() => handleDeleteMaterial(material.id)}
-                                className="text-red-600 hover:text-red-900"
-                              >
-                                Delete
-                              </button>
+                            <td className="whitespace-nowrap px-6 py-4 text-right">
+                              <div className="inline-flex items-center gap-2">
+                                <button
+                                  onClick={() => handleOpenEditMaterial(material)}
+                                  className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 hover:border-indigo-400 transition-colors"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                  </svg>
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteMaterial(material.id)}
+                                  className="inline-flex items-center gap-1.5 rounded-full bg-red-50 border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 hover:border-red-400 transition-colors"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                  Delete
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -718,7 +796,21 @@ export default function Dashboard({
                   />
                 </div>
 
-                <div className="sm:col-span-2">
+                <div>
+                  <label htmlFor="cust-ref" className="block text-xs font-medium text-gray-700 mb-1">
+                    Reference Person Name (Optional)
+                  </label>
+                  <input
+                    id="cust-ref"
+                    type="text"
+                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="e.g. Anil Sharma"
+                    value={custReference}
+                    onChange={(e) => setCustReference(e.target.value)}
+                  />
+                </div>
+
+                <div className="sm:col-span-1">
                   <button
                     type="submit"
                     className="w-full sm:w-auto px-6 rounded-md bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-xs"
@@ -749,6 +841,9 @@ export default function Dashboard({
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Phone Number
                         </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Reference
+                        </th>
                         <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Actions
                         </th>
@@ -763,19 +858,30 @@ export default function Dashboard({
                           <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-600">
                             {customer.phone}
                           </td>
-                          <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium space-x-3">
-                            <button
-                              onClick={() => handleOpenEditCustomer(customer)}
-                              className="text-indigo-600 hover:text-indigo-900"
-                            >
-                              Update
-                            </button>
-                            <button
-                              onClick={() => handleDeleteCustomer(customer.id)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              Delete
-                            </button>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-600">
+                            {customer.reference_name || '—'}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-right">
+                            <div className="inline-flex items-center gap-2">
+                              <button
+                                onClick={() => handleOpenEditCustomer(customer)}
+                                className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 hover:border-indigo-400 transition-colors"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                </svg>
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteCustomer(customer.id)}
+                                className="inline-flex items-center gap-1.5 rounded-full bg-red-50 border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 hover:border-red-400 transition-colors"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                                Delete
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -903,6 +1009,22 @@ export default function Dashboard({
                   })}
                 </div>
 
+                {/* Advance Amount field */}
+                <div>
+                  <label htmlFor="rent-advance" className="block text-xs font-medium text-gray-700 mb-1">
+                    Advance Amount (₹) <span className="text-gray-400 font-normal">— optional, enter 0 if none</span>
+                  </label>
+                  <input
+                    id="rent-advance"
+                    type="number"
+                    min="0"
+                    className="block w-full sm:w-48 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="e.g. 500"
+                    value={rentAdvance}
+                    onChange={(e) => setRentAdvance(e.target.value)}
+                  />
+                </div>
+
                 <button
                   type="submit"
                   className="w-full sm:w-auto px-6 rounded-md bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-xs"
@@ -922,84 +1044,171 @@ export default function Dashboard({
                 <div className="text-sm text-gray-500 border border-dashed border-gray-300 p-6 rounded-md text-center">
                   No active or completed rentals logged. Allocate items on the right to start.
                 </div>
-              ) : (
-                <div className="overflow-x-auto border border-gray-200 rounded-lg bg-white shadow-xs">
-                  <table className="w-full min-w-[900px] divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Customer
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Material
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Qty
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Dates
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Rent Charged
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Action
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 bg-white">
-                      {rentals.map((rental) => {
-                        const customer = customers.find(c => c.id === rental.customer_id);
-                        const material = materials.find(m => m.id === rental.material_id);
-                        return (
-                          <tr key={rental.id}>
-                            <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-gray-900">
-                              {customer ? customer.name : 'Unknown Customer'}
-                            </td>
-                            <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-800">
-                              {material ? material.name : 'Unknown Material'}
-                            </td>
-                            <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                              {rental.quantity}
-                            </td>
-                            <td className="whitespace-nowrap px-6 py-4 text-xs text-gray-500 space-y-1">
-                              <div><strong>Rent:</strong> {rental.rental_date}</div>
-                              {rental.return_date && <div><strong>Ret:</strong> {rental.return_date}</div>}
-                            </td>
-                            <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
-                              {rental.total_rent !== null ? `₹${rental.total_rent}` : '-'}
-                            </td>
-                            <td className="whitespace-nowrap px-6 py-4 text-xs">
-                              {rental.status === 'Active' ? (
-                                <span className="inline-flex rounded-full bg-blue-100 px-2.5 py-0.5 font-semibold leading-5 text-blue-800">
-                                  Active
-                                </span>
-                              ) : (
-                                <span className="inline-flex rounded-full bg-green-100 px-2.5 py-0.5 font-semibold leading-5 text-green-800">
-                                  Returned
-                                </span>
-                              )}
-                            </td>
-                            <td className="whitespace-nowrap px-6 py-4 text-xs">
-                              {rental.status === 'Active' && (
-                                <button
-                                  onClick={() => setActiveReturnRental(rental)}
-                                  className="rounded-sm bg-indigo-50 border border-indigo-200 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
-                                >
-                                  Return Item
-                                </button>
-                              )}
-                            </td>
+              ) : (() => {
+                // Sort rentals latest-first by rental_date
+                const sortedRentals = [...rentals].sort((a, b) =>
+                  new Date(b.rental_date).getTime() - new Date(a.rental_date).getTime()
+                );
+
+                // Pagination calculations
+                const totalPages = Math.ceil(sortedRentals.length / RENTALS_PER_PAGE);
+                const startIndex = (rentalsPage - 1) * RENTALS_PER_PAGE;
+                const pageRentals = sortedRentals.slice(startIndex, startIndex + RENTALS_PER_PAGE);
+
+                return (
+                  <div className="space-y-3">
+                    <div className="overflow-x-auto border border-gray-200 rounded-lg bg-white shadow-xs">
+                      <table className="w-full min-w-[900px] divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Customer
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Material
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Qty
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Dates
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Rent Charged
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Advance
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Balance
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Payment Status
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Action
+                            </th>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 bg-white">
+                          {pageRentals.map((rental) => {
+                            const customer = customers.find(c => c.id === rental.customer_id);
+                            const material = materials.find(m => m.id === rental.material_id);
+                            return (
+                              <tr key={rental.id}>
+                                <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-gray-900">
+                                  {customer ? customer.name : 'Unknown Customer'}
+                                </td>
+                                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-800">
+                                  {material ? material.name : 'Unknown Material'}
+                                </td>
+                                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                                  {rental.quantity}
+                                </td>
+                                <td className="whitespace-nowrap px-6 py-4 text-xs text-gray-500 space-y-1">
+                                  <div><strong>Rent:</strong> {rental.rental_date}</div>
+                                  {rental.return_date && <div><strong>Ret:</strong> {rental.return_date}</div>}
+                                </td>
+                                <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                                  {rental.total_rent !== null ? `₹${rental.total_rent}` : '-'}
+                                </td>
+
+                                {/* Advance column */}
+                                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">
+                                  ₹{rental.advance_amount ?? 0}
+                                </td>
+
+                                {/* Balance column — only meaningful after return */}
+                                <td className="whitespace-nowrap px-6 py-4 text-xs">
+                                  {rental.status === 'Returned' && rental.total_rent !== null ? (() => {
+                                    const result = calculatePaymentResultSkill(rental.total_rent, rental.advance_amount ?? 0);
+                                    if (result.status === 'remaining') {
+                                      return <span className="text-red-700 font-semibold">Collect ₹{result.amount}</span>;
+                                    } else if (result.status === 'refund') {
+                                      return <span className="text-emerald-700 font-semibold">Refund ₹{result.amount}</span>;
+                                    } else {
+                                      return <span className="text-green-700 font-semibold">Settled</span>;
+                                    }
+                                  })() : <span className="text-gray-400">—</span>}
+                                </td>
+
+                                {/* Payment Status column */}
+                                <td className="whitespace-nowrap px-6 py-4 text-xs">
+                                  {rental.status === 'Active' ? (
+                                    <span className="inline-flex rounded-full bg-yellow-100 px-2.5 py-0.5 font-semibold leading-5 text-yellow-800">
+                                      Pending Return
+                                    </span>
+                                  ) : rental.total_rent !== null ? (() => {
+                                    const result = calculatePaymentResultSkill(rental.total_rent, rental.advance_amount ?? 0);
+                                    if (result.status === 'remaining') {
+                                      return (
+                                        <span className="inline-flex rounded-full bg-red-100 px-2.5 py-0.5 font-semibold leading-5 text-red-800">
+                                          Remaining
+                                        </span>
+                                      );
+                                    } else if (result.status === 'refund') {
+                                      return (
+                                        <span className="inline-flex rounded-full bg-blue-100 px-2.5 py-0.5 font-semibold leading-5 text-blue-800">
+                                          Refund Due
+                                        </span>
+                                      );
+                                    } else {
+                                      return (
+                                        <span className="inline-flex rounded-full bg-green-100 px-2.5 py-0.5 font-semibold leading-5 text-green-800">
+                                          Settled
+                                        </span>
+                                      );
+                                    }
+                                  })() : <span className="text-gray-400">—</span>}
+                                </td>
+
+                                <td className="whitespace-nowrap px-6 py-4 text-xs">
+                                  {rental.status === 'Active' && (
+                                    <button
+                                      onClick={() => setActiveReturnRental(rental)}
+                                      className="rounded-sm bg-indigo-50 border border-indigo-200 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                                    >
+                                      Return Item
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between px-1">
+                        <p className="text-xs text-gray-500">
+                          Showing {startIndex + 1}–{Math.min(startIndex + RENTALS_PER_PAGE, sortedRentals.length)} of {sortedRentals.length} records
+                        </p>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => setRentalsPage(p => Math.max(1, p - 1))}
+                            disabled={rentalsPage === 1}
+                            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            ← Previous
+                          </button>
+                          <span className="text-xs font-medium text-gray-700">
+                            Page {rentalsPage} of {totalPages}
+                          </span>
+                          <button
+                            onClick={() => setRentalsPage(p => Math.min(totalPages, p + 1))}
+                            disabled={rentalsPage === totalPages}
+                            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Next →
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -1035,6 +1244,7 @@ export default function Dashboard({
                 <div><strong>Quantity:</strong> {activeReturnRental.quantity} units</div>
                 <div><strong>Rented Date:</strong> {activeReturnRental.rental_date}</div>
                 <div><strong>Daily Rate:</strong> ₹{materials.find(m => m.id === activeReturnRental.material_id)?.price_per_day || 0} / day</div>
+                <div><strong>Advance Paid:</strong> ₹{activeReturnRental.advance_amount ?? 0}</div>
               </div>
 
               <form onSubmit={handleReturnRentalSubmit} className="space-y-4">
@@ -1052,21 +1262,57 @@ export default function Dashboard({
                   />
                 </div>
 
-                {/* Live Cost estimation directly shown */}
+                {/* Live Cost estimation + Payment Result */}
                 {returnDate && activeReturnRental && (
-                  <div className="text-xs font-semibold text-indigo-700 bg-indigo-50 p-2.5 rounded-sm">
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold text-indigo-700 bg-indigo-50 p-2.5 rounded-sm">
+                      {(() => {
+                        const mat = materials.find(m => m.id === activeReturnRental.material_id);
+                        if (!mat) return '';
+
+                        const tRental = new Date(activeReturnRental.rental_date).getTime();
+                        const tReturn = new Date(returnDate).getTime();
+
+                        if (tReturn < tRental) return 'Invalid return date Selected.';
+
+                        const days = Math.round(Math.abs(tReturn - tRental) / (1000 * 60 * 60 * 24)) + 1;
+                        const cost = activeReturnRental.quantity * mat.price_per_day * days;
+                        return `Estimated: ₹${mat.price_per_day} × ${activeReturnRental.quantity} qty × ${days} days = ₹${cost}`;
+                      })()}
+                    </div>
+
+                    {/* Payment result preview */}
                     {(() => {
                       const mat = materials.find(m => m.id === activeReturnRental.material_id);
-                      if (!mat) return '';
-
+                      if (!mat) return null;
                       const tRental = new Date(activeReturnRental.rental_date).getTime();
                       const tReturn = new Date(returnDate).getTime();
-
-                      if (tReturn < tRental) return 'Invalid return date Selected.';
+                      if (tReturn < tRental) return null;
 
                       const days = Math.round(Math.abs(tReturn - tRental) / (1000 * 60 * 60 * 24)) + 1;
-                      const cost = activeReturnRental.quantity * mat.price_per_day * days;
-                      return `Estimated: ₹${mat.price_per_day} × ${activeReturnRental.quantity} qty × ${days} days = ₹${cost}`;
+                      const totalRent = activeReturnRental.quantity * mat.price_per_day * days;
+                      const advance = activeReturnRental.advance_amount ?? 0;
+                      const result = calculatePaymentResultSkill(totalRent, advance);
+
+                      if (result.status === 'remaining') {
+                        return (
+                          <div className="text-xs font-semibold text-red-700 bg-red-50 border border-red-200 p-2.5 rounded-sm">
+                            💰 Collect ₹{result.amount} from customer (Total ₹{totalRent} − Advance ₹{advance})
+                          </div>
+                        );
+                      } else if (result.status === 'refund') {
+                        return (
+                          <div className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 p-2.5 rounded-sm">
+                            🔄 Return ₹{result.amount} to customer (Advance ₹{advance} − Total ₹{totalRent})
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 p-2.5 rounded-sm">
+                            ✅ Fully Settled — no further payment needed
+                          </div>
+                        );
+                      }
                     })()}
                   </div>
                 )}
@@ -1221,6 +1467,18 @@ export default function Dashboard({
                     className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
                     value={editCustPhone}
                     onChange={(e) => setEditCustPhone(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="edit-cust-ref" className="block text-xs font-medium text-gray-700 mb-1">
+                    Reference Person Name (Optional)
+                  </label>
+                  <input
+                    id="edit-cust-ref"
+                    type="text"
+                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-indigo-500"
+                    value={editCustReference}
+                    onChange={(e) => setEditCustReference(e.target.value)}
                   />
                 </div>
                 <div className="flex space-x-3">

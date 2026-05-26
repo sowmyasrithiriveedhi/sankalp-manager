@@ -18,16 +18,18 @@ export function useMaterials() {
     try {
       const data = await getMaterialsSkill();
       setMaterials(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch materials.';
       console.error('Failed to load materials:', err);
-      setError(err.message || 'Failed to fetch materials.');
+      setError(message);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchMaterials();
+    const run = async () => { await fetchMaterials(); };
+    void run();
   }, [fetchMaterials]);
 
   const addMaterial = async (
@@ -39,11 +41,12 @@ export function useMaterials() {
     setError(null);
     try {
       await addMaterialSkill(name, totalQuantity, pricePerDay);
-      await fetchMaterials(); // Refresh materials
+      await fetchMaterials();
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to add material.';
       console.error('Failed to add material:', err);
-      setError(err.message || 'Failed to add material.');
+      setError(message);
       return false;
     } finally {
       setIsLoading(false);
@@ -57,9 +60,10 @@ export function useMaterials() {
       await deleteMaterialSkill(id);
       await fetchMaterials();
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete material.';
       console.error('Failed to delete material:', err);
-      setError(err.message || 'Failed to delete material.');
+      setError(message);
       return false;
     } finally {
       setIsLoading(false);
@@ -78,9 +82,10 @@ export function useMaterials() {
       await updateMaterialSkill(id, name, totalQuantity, pricePerDay);
       await fetchMaterials();
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update material.';
       console.error('Failed to update material:', err);
-      setError(err.message || 'Failed to update material.');
+      setError(message);
       return false;
     } finally {
       setIsLoading(false);

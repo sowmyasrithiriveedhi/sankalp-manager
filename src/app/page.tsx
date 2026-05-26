@@ -13,8 +13,7 @@ export default function Home() {
     isLoading: isAuthLoading,
     error: authError,
     login,
-    logout,
-    refreshSession
+    logout
   } = useAuth();
 
   const {

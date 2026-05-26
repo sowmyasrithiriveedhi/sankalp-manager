@@ -46,9 +46,10 @@ export function useDashboardStats() {
         returnedRentals: rentalStats.returnedCount,
         availableStock: stockStats.availableStockQuantity
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch dashboard statistics.';
       console.error('Failed to load dashboard statistics:', err);
-      setError(err.message || 'Failed to fetch dashboard statistics.');
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -56,7 +57,8 @@ export function useDashboardStats() {
 
   // Fetch stats on component load
   useEffect(() => {
-    fetchStats();
+    const run = async () => { await fetchStats(); };
+    void run();
   }, [fetchStats]);
 
   return {

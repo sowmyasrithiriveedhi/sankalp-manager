@@ -21,7 +21,7 @@ export function calculateStockStatsSubagent(materials: Material[], rentals: Rent
   
   // Calculate total stock and active rentals
   let totalStockQuantity = 0;
-  let activeRentalsQtyMap: Record<string, number> = {};
+  const activeRentalsQtyMap: Record<string, number> = {};
 
   // Build mapping of active rented quantities per material
   rentals.forEach(rental => {

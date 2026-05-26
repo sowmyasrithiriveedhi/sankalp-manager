@@ -18,28 +18,31 @@ export function useCustomers() {
     try {
       const data = await getCustomersSkill();
       setCustomers(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch customers.';
       console.error('Failed to load customers:', err);
-      setError(err.message || 'Failed to fetch customers.');
+      setError(message);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchCustomers();
+    const run = async () => { await fetchCustomers(); };
+    void run();
   }, [fetchCustomers]);
 
-  const addCustomer = async (name: string, phone: string): Promise<boolean> => {
+  const addCustomer = async (name: string, phone: string, referenceName: string): Promise<boolean> => {
     setIsLoading(true);
     setError(null);
     try {
-      await addCustomerSkill(name, phone);
-      await fetchCustomers(); // Refresh customers
+      await addCustomerSkill(name, phone, referenceName);
+      await fetchCustomers();
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to add customer.';
       console.error('Failed to add customer:', err);
-      setError(err.message || 'Failed to add customer.');
+      setError(message);
       return false;
     } finally {
       setIsLoading(false);
@@ -53,25 +56,27 @@ export function useCustomers() {
       await deleteCustomerSkill(id);
       await fetchCustomers();
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete customer.';
       console.error('Failed to delete customer:', err);
-      setError(err.message || 'Failed to delete customer.');
+      setError(message);
       return false;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const updateCustomer = async (id: string, name: string, phone: string): Promise<boolean> => {
+  const updateCustomer = async (id: string, name: string, phone: string, referenceName: string): Promise<boolean> => {
     setIsLoading(true);
     setError(null);
     try {
-      await updateCustomerSkill(id, name, phone);
+      await updateCustomerSkill(id, name, phone, referenceName);
       await fetchCustomers();
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update customer.';
       console.error('Failed to update customer:', err);
-      setError(err.message || 'Failed to update customer.');
+      setError(message);
       return false;
     } finally {
       setIsLoading(false);

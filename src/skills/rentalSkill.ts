@@ -14,9 +14,10 @@ export async function createRentalRecord(
   customerId: string,
   materialId: string,
   quantity: number,
-  rentalDate: string
+  rentalDate: string,
+  advanceAmount: number
 ): Promise<Rental> {
-  return await mcpCreateRental(customerId, materialId, quantity, rentalDate);
+  return await mcpCreateRental(customerId, materialId, quantity, rentalDate, advanceAmount);
 }
 
 export async function updateRentalStatus(

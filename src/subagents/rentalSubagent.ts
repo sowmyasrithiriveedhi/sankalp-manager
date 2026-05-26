@@ -42,7 +42,8 @@ export async function processRentalSubagent(
   quantity: number,
   rentalDate: string,
   materials: Material[],
-  rentals: Rental[]
+  rentals: Rental[],
+  advanceAmount: number
 ): Promise<Rental> {
   // 1. Perform automatic stock validation using stockSubagent
   const stockCheck = checkStockAvailabilitySubagent(materialId, quantity, materials, rentals);
@@ -51,6 +52,7 @@ export async function processRentalSubagent(
     throw new Error(`Insufficient Stock. Requested: ${quantity}, Available: ${stockCheck.currentAvailable}.`);
   }
 
-  // 2. Delegate creation to rentalSkill
-  return await createRentalRecord(customerId, materialId, quantity, rentalDate);
+  // 2. Delegate creation to rentalSkill (passes advance amount through)
+  return await createRentalRecord(customerId, materialId, quantity, rentalDate, advanceAmount);
 }
+

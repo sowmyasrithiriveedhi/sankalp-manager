@@ -20,7 +20,7 @@ export function useAuth() {
       const session = await mcpGetSession();
       setIsAuthenticated(session.active);
       setUserEmail(session.email);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to check session:', err);
       setError('Failed to fetch authentication session.');
     } finally {
@@ -29,7 +29,8 @@ export function useAuth() {
   }, []);
 
   useEffect(() => {
-    checkSession();
+    const run = async () => { await checkSession(); };
+    void run();
   }, [checkSession]);
 
   // Login handler
@@ -46,8 +47,9 @@ export function useAuth() {
         setError(result.error);
         return false;
       }
-    } catch (err: any) {
-      setError(err.message || 'Login failed unexpectedly.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Login failed unexpectedly.';
+      setError(message);
       return false;
     } finally {
       setIsLoading(false);
@@ -67,8 +69,9 @@ export function useAuth() {
         setError(result.error);
         return false;
       }
-    } catch (err: any) {
-      setError(err.message || 'Logout failed.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Logout failed.';
+      setError(message);
       return false;
     } finally {
       setIsLoading(false);

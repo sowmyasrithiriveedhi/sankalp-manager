@@ -11,7 +11,7 @@ import { supabase, mockDb, Material, Customer, Rental } from '../lib/supabaseCli
 export async function mcpSignIn(email: string, password: string): Promise<{ success: boolean; error: string | null }> {
   try {
     if (supabase) {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) return { success: false, error: error.message };
       return { success: true, error: null };
     } else {
@@ -23,8 +23,9 @@ export async function mcpSignIn(email: string, password: string): Promise<{ succ
         return { success: false, error: 'Invalid email or password. Use admin@sankalp.com and admin123 for Mock admin.' };
       }
     }
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Authentication error' };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Authentication error';
+    return { success: false, error: message };
   }
 }
 
@@ -38,8 +39,9 @@ export async function mcpSignOut(): Promise<{ success: boolean; error: string | 
       mockDb.setAdminSession(false);
       return { success: true, error: null };
     }
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Sign out error' };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Sign out error';
+    return { success: false, error: message };
   }
 }
 
@@ -142,22 +144,22 @@ export async function mcpAddMaterial(
   }
 }
 
-export async function mcpAddCustomer(name: string, phone: string): Promise<Customer> {
+export async function mcpAddCustomer(name: string, phone: string, referenceName: string): Promise<Customer> {
   try {
     if (supabase) {
       const { data, error } = await supabase
         .from('customers')
-        .insert([{ name, phone }])
+        .insert([{ name, phone, reference_name: referenceName }])
         .select()
         .single();
       if (error) throw error;
       return data;
     } else {
-      return mockDb.addCustomer(name, phone);
+      return mockDb.addCustomer(name, phone, referenceName);
     }
   } catch (err) {
     console.error('MCP addCustomer error, falling back to mock:', err);
-    return mockDb.addCustomer(name, phone);
+    return mockDb.addCustomer(name, phone, referenceName);
   }
 }
 
@@ -165,25 +167,29 @@ export async function mcpCreateRental(
   customerId: string,
   materialId: string,
   quantity: number,
-  rentalDate: string
+  rentalDate: string,
+  advanceAmount: number  // advance paid upfront (0 if none)
 ): Promise<Rental> {
+  // NOTE for Supabase users: ensure the rentals table has an advance_amount column.
+  // Run: ALTER TABLE rentals ADD COLUMN advance_amount NUMERIC DEFAULT 0;
   try {
     if (supabase) {
       const { data, error } = await supabase
         .from('rentals')
-        .insert([{ customer_id: customerId, material_id: materialId, quantity, rental_date: rentalDate, status: 'Active' }])
+        .insert([{ customer_id: customerId, material_id: materialId, quantity, rental_date: rentalDate, status: 'Active', advance_amount: advanceAmount }])
         .select()
         .single();
       if (error) throw error;
       return data;
     } else {
-      return mockDb.addRental(customerId, materialId, quantity, rentalDate);
+      return mockDb.addRental(customerId, materialId, quantity, rentalDate, advanceAmount);
     }
   } catch (err) {
     console.error('MCP createRental error, falling back to mock:', err);
-    return mockDb.addRental(customerId, materialId, quantity, rentalDate);
+    return mockDb.addRental(customerId, materialId, quantity, rentalDate, advanceAmount);
   }
 }
+
 
 export async function mcpReturnRental(
   rentalId: string,
@@ -269,23 +275,24 @@ export async function mcpUpdateMaterial(
 export async function mcpUpdateCustomer(
   id: string,
   name: string,
-  phone: string
+  phone: string,
+  referenceName: string
 ): Promise<Customer> {
   try {
     if (supabase) {
       const { data, error } = await supabase
         .from('customers')
-        .update({ name, phone })
+        .update({ name, phone, reference_name: referenceName })
         .eq('id', id)
         .select()
         .single();
       if (error) throw error;
       return data;
     } else {
-      return mockDb.updateCustomer(id, name, phone);
+      return mockDb.updateCustomer(id, name, phone, referenceName);
     }
   } catch (err) {
     console.error('MCP updateCustomer error, falling back to mock:', err);
-    return mockDb.updateCustomer(id, name, phone);
+    return mockDb.updateCustomer(id, name, phone, referenceName);
   }
 }

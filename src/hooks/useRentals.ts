@@ -20,16 +20,18 @@ export function useRentals() {
     try {
       const data = await getRentalsSkill();
       setRentals(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch rentals.';
       console.error('Failed to load rentals:', err);
-      setError(err.message || 'Failed to fetch rentals.');
+      setError(message);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchRentals();
+    const run = async () => { await fetchRentals(); };
+    void run();
   }, [fetchRentals]);
 
   /**
@@ -41,24 +43,25 @@ export function useRentals() {
     materialId: string,
     quantity: number,
     rentalDate: string,
-    materials: Material[]
+    materials: Material[],
+    advanceAmount: number
   ): Promise<{ success: boolean; error: string | null }> => {
     setIsLoading(true);
     setError(null);
     try {
-      // Direct call to subagent coordinator
-      await processRentalSubagent(customerId, materialId, quantity, rentalDate, materials, rentals);
-      await fetchRentals(); // Refresh list
+      await processRentalSubagent(customerId, materialId, quantity, rentalDate, materials, rentals, advanceAmount);
+      await fetchRentals();
       return { success: true, error: null };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Failed to process rental.';
       console.error('Failed to allocate rental:', err);
-      const errMsg = err.message || 'Failed to process rental.';
       setError(errMsg);
       return { success: false, error: errMsg };
     } finally {
       setIsLoading(false);
     }
   };
+
 
   /**
    * Processes a rental return event.
@@ -72,13 +75,12 @@ export function useRentals() {
     setIsLoading(true);
     setError(null);
     try {
-      // Direct call to subagent coordinator
       await processReturnSubagent(rentalId, returnDate, rentals, materials);
-      await fetchRentals(); // Refresh list
+      await fetchRentals();
       return { success: true, error: null };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Failed to process return.';
       console.error('Failed to process return:', err);
-      const errMsg = err.message || 'Failed to process return.';
       setError(errMsg);
       return { success: false, error: errMsg };
     } finally {

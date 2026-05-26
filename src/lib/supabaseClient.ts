@@ -5,9 +5,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 
 
-const hasRealCredentials =
-  supabaseUrl &&
-  supabaseAnonKey;
+// No real credentials check needed here, managed via proxy/env
 
 export const supabase = createClient(
   supabaseUrl,
@@ -26,6 +24,7 @@ export interface Customer {
   id: string;
   name: string;
   phone: string;
+  reference_name: string;
 }
 
 export interface Rental {
@@ -37,6 +36,7 @@ export interface Rental {
   return_date: string | null;
   total_rent: number | null;
   status: 'Active' | 'Returned';
+  advance_amount: number; // Amount paid upfront at the time of rental
 }
 
 const INITIAL_MATERIALS: Material[] = [
@@ -122,12 +122,13 @@ export const mockDb = {
     return newMaterial;
   },
 
-  addCustomer: (name: string, phone: string): Customer => {
+  addCustomer: (name: string, phone: string, reference_name: string): Customer => {
     const customers = mockDb.getCustomers();
     const newCustomer: Customer = {
       id: `cust-${Date.now()}`,
       name,
-      phone
+      phone,
+      reference_name
     };
     customers.push(newCustomer);
     localStorage.setItem(KEYS.CUSTOMERS, JSON.stringify(customers));
@@ -138,7 +139,8 @@ export const mockDb = {
     customer_id: string,
     material_id: string,
     quantity: number,
-    rental_date: string
+    rental_date: string,
+    advance_amount: number
   ): Rental => {
     const rentals = mockDb.getRentals();
     const newRental: Rental = {
@@ -149,7 +151,8 @@ export const mockDb = {
       rental_date,
       return_date: null,
       total_rent: null,
-      status: 'Active'
+      status: 'Active',
+      advance_amount
     };
     rentals.push(newRental);
     localStorage.setItem(KEYS.RENTALS, JSON.stringify(rentals));
@@ -168,7 +171,7 @@ export const mockDb = {
     }
 
     rentals[index] = {
-      ...rentals[index],
+      ...rentals[index], // preserves advance_amount and all other fields
       return_date,
       total_rent,
       status: 'Returned'
@@ -187,11 +190,11 @@ export const mockDb = {
     return materials[index];
   },
 
-  updateCustomer: (id: string, name: string, phone: string): Customer => {
+  updateCustomer: (id: string, name: string, phone: string, reference_name: string): Customer => {
     const customers = mockDb.getCustomers();
     const index = customers.findIndex(c => c.id === id);
     if (index === -1) throw new Error(`Customer ${id} not found.`);
-    customers[index] = { ...customers[index], name, phone };
+    customers[index] = { ...customers[index], name, phone, reference_name };
     localStorage.setItem(KEYS.CUSTOMERS, JSON.stringify(customers));
     return customers[index];
   },
