@@ -17,7 +17,7 @@ interface DashboardProps {
   onRefresh: () => void;
 }
 
-type TabType = 'overview' | 'materials' | 'customers' | 'rentals';
+type TabType = 'overview' | 'materials' | 'customers' | 'rentals' | 'history';
 
 // A single row in the multi-material rental form
 interface RentalRow {
@@ -117,6 +117,11 @@ export default function Dashboard({
   // Rentals History Pagination
   const RENTALS_PER_PAGE = 10;
   const [rentalsPage, setRentalsPage] = useState(1);
+
+  // Date-wise Rental History
+  type HistoryFilterType = 'Today' | 'Yesterday' | 'Before Yesterday' | 'All';
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilterType>('All');
+  const [historyPage, setHistoryPage] = useState(1);
 
   // --- PHONE VALIDATION HELPER ---
 
@@ -489,6 +494,12 @@ export default function Dashboard({
               >
                 Rentals
               </button>
+              <button
+                onClick={() => setActiveTab('history')}
+                className={activeTab === 'history' ? activeTabClass : inactiveTabClass}
+              >
+                Rental History
+              </button>
             </nav>
             <button
               onClick={handleGlobalRefresh}
@@ -544,16 +555,16 @@ export default function Dashboard({
                   </div>
                 </div>
 
-                {/* Returned Rentals */}
+                {/* Total Customers */}
                 <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-xs">
                   <div className="text-sm font-medium text-gray-500 uppercase tracking-wider">
-                    Returned Rentals
+                    Total Customers
                   </div>
                   <div className="mt-2 flex items-baseline justify-between">
                     <span className="text-3xl font-bold text-emerald-600">
-                      {stats.returnedRentals}
+                      {stats.totalCustomers}
                     </span>
-                    <span className="text-xs text-gray-400">Completed cycles</span>
+                    <span className="text-xs text-gray-400">Registered clients</span>
                   </div>
                 </div>
 
@@ -1199,6 +1210,163 @@ export default function Dashboard({
                           <button
                             onClick={() => setRentalsPage(p => Math.min(totalPages, p + 1))}
                             disabled={rentalsPage === totalPages}
+                            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Next →
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* --- RENTAL HISTORY TAB CONTENT --- */}
+        {activeTab === 'history' && (
+          <div className="flex flex-col gap-8">
+            {/* Date-wise Rental History Module */}
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold text-gray-800">Date-wise Rental History</h2>
+              
+              {/* Filter Buttons */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {(['Today', 'Yesterday', 'Before Yesterday', 'All'] as HistoryFilterType[]).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => { setHistoryFilter(filter); setHistoryPage(1); }}
+                    className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                      historyFilter === filter 
+                        ? 'bg-indigo-600 text-white' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {filter === 'All' ? 'All Rentals' : filter}
+                  </button>
+                ))}
+              </div>
+
+              {(() => {
+                const sortedRentals = [...rentals].sort((a, b) =>
+                  new Date(b.rental_date).getTime() - new Date(a.rental_date).getTime()
+                );
+                
+                const todayDate = new Date();
+                const todayStrLocal = todayDate.toISOString().split('T')[0];
+                const yesterdayDate = new Date(todayDate);
+                yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+                const yesterdayStrLocal = yesterdayDate.toISOString().split('T')[0];
+
+                // Filter
+                const filteredRentals = sortedRentals.filter((r) => {
+                  if (historyFilter === 'All') return true;
+                  const rDate = r.rental_date;
+                  if (historyFilter === 'Today') return rDate === todayStrLocal;
+                  if (historyFilter === 'Yesterday') return rDate === yesterdayStrLocal;
+                  if (historyFilter === 'Before Yesterday') return rDate < yesterdayStrLocal;
+                  return true;
+                });
+
+                // Pagination
+                const histTotalPages = Math.max(1, Math.ceil(filteredRentals.length / RENTALS_PER_PAGE));
+                const histStartIndex = (historyPage - 1) * RENTALS_PER_PAGE;
+                const histPageRentals = filteredRentals.slice(histStartIndex, histStartIndex + RENTALS_PER_PAGE);
+
+                if (filteredRentals.length === 0) {
+                  return (
+                    <div className="text-sm text-gray-500 border border-dashed border-gray-300 p-6 rounded-md text-center">
+                      No rentals found for the selected filter.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-3">
+                    <div className="overflow-x-auto border border-gray-200 rounded-lg bg-white shadow-xs">
+                      <table className="w-full min-w-[1000px] divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Name</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material Name</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rental Date</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Return Date</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Advance Amount</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Rent</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Status</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remaining / Return Amount</th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rental Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 bg-white">
+                          {histPageRentals.map((rental) => {
+                            const customer = customers.find(c => c.id === rental.customer_id);
+                            const material = materials.find(m => m.id === rental.material_id);
+                            
+                            let paymentResultLabel = <span className="text-gray-400">—</span>;
+                            let paymentStatusLabel = <span className="inline-flex rounded-full bg-yellow-100 px-2.5 py-0.5 font-semibold leading-5 text-yellow-800">Pending Return</span>;
+                            
+                            if (rental.status === 'Returned' && rental.total_rent !== null) {
+                              const result = calculatePaymentResultSkill(rental.total_rent, rental.advance_amount ?? 0);
+                              if (result.status === 'remaining') {
+                                paymentResultLabel = <span className="text-red-700 font-semibold">Collect ₹{result.amount}</span>;
+                                paymentStatusLabel = <span className="inline-flex rounded-full bg-red-100 px-2.5 py-0.5 font-semibold leading-5 text-red-800">Remaining</span>;
+                              } else if (result.status === 'refund') {
+                                paymentResultLabel = <span className="text-emerald-700 font-semibold">Refund ₹{result.amount}</span>;
+                                paymentStatusLabel = <span className="inline-flex rounded-full bg-blue-100 px-2.5 py-0.5 font-semibold leading-5 text-blue-800">Refund Due</span>;
+                              } else {
+                                paymentResultLabel = <span className="text-green-700 font-semibold">Settled</span>;
+                                paymentStatusLabel = <span className="inline-flex rounded-full bg-green-100 px-2.5 py-0.5 font-semibold leading-5 text-green-800">Settled</span>;
+                              }
+                            }
+
+                            return (
+                              <tr key={`hist-${rental.id}`}>
+                                <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-gray-900">{customer ? customer.name : 'Unknown'}</td>
+                                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-800">{material ? material.name : 'Unknown'}</td>
+                                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{rental.quantity}</td>
+                                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{rental.rental_date}</td>
+                                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{rental.return_date || '—'}</td>
+                                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">₹{rental.advance_amount ?? 0}</td>
+                                <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{rental.total_rent !== null ? `₹${rental.total_rent}` : '—'}</td>
+                                <td className="whitespace-nowrap px-4 py-3 text-xs">{paymentStatusLabel}</td>
+                                <td className="whitespace-nowrap px-4 py-3 text-xs">{paymentResultLabel}</td>
+                                <td className="whitespace-nowrap px-4 py-3 text-xs">
+                                  {rental.status === 'Active' ? (
+                                    <span className="inline-flex rounded-full bg-indigo-100 px-2.5 py-0.5 font-semibold leading-5 text-indigo-800">Active</span>
+                                  ) : (
+                                    <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 font-semibold leading-5 text-gray-800">Returned</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Pagination Controls */}
+                    {histTotalPages > 1 && (
+                      <div className="flex items-center justify-between px-1">
+                        <p className="text-xs text-gray-500">
+                          Showing {histStartIndex + 1}–{Math.min(histStartIndex + RENTALS_PER_PAGE, filteredRentals.length)} of {filteredRentals.length} records
+                        </p>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                            disabled={historyPage === 1}
+                            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            ← Previous
+                          </button>
+                          <span className="text-xs font-medium text-gray-700">
+                            Page {historyPage} of {histTotalPages}
+                          </span>
+                          <button
+                            onClick={() => setHistoryPage(p => Math.min(histTotalPages, p + 1))}
+                            disabled={historyPage === histTotalPages}
                             className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             Next →

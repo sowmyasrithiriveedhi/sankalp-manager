@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getMaterialsSkill } from '../skills/materialSkill';
 import { getRentalsSkill } from '../skills/rentalSkill';
+import { getCustomersSkill } from '../skills/customerSkill';
 import { calculateStockStatsSubagent } from '../subagents/stockSubagent';
 import { calculateRentalStatsSubagent } from '../subagents/rentalSubagent';
 
@@ -13,7 +14,7 @@ import { calculateRentalStatsSubagent } from '../subagents/rentalSubagent';
 export interface DashboardStatsData {
   totalMaterials: number;       // Number of unique items
   activeRentals: number;        // Number of active rental events
-  returnedRentals: number;      // Number of returned rental events
+  totalCustomers: number;       // Number of total customers
   availableStock: number;       // Dynamic available quantity across all materials
 }
 
@@ -21,7 +22,7 @@ export function useDashboardStats() {
   const [stats, setStats] = useState<DashboardStatsData>({
     totalMaterials: 0,
     activeRentals: 0,
-    returnedRentals: 0,
+    totalCustomers: 0,
     availableStock: 0
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -34,6 +35,7 @@ export function useDashboardStats() {
       // 1. Fetch data from Skills (which call MCP)
       const materials = await getMaterialsSkill();
       const rentals = await getRentalsSkill();
+      const customers = await getCustomersSkill();
 
       // 2. Compute dynamic stats using Subagents
       const stockStats = calculateStockStatsSubagent(materials, rentals);
@@ -43,7 +45,7 @@ export function useDashboardStats() {
       setStats({
         totalMaterials: stockStats.totalMaterials,
         activeRentals: rentalStats.activeCount,
-        returnedRentals: rentalStats.returnedCount,
+        totalCustomers: customers.length,
         availableStock: stockStats.availableStockQuantity
       });
     } catch (err: unknown) {
